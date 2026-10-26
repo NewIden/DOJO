@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="noindex, nofollow" name="robots"/>
+<meta content="My Intigriti Challenge 1026 solution: coupon reuse across storefront pages accumulated discounts past 100% and allowed a free checkout." name="description"/>
+<title>Coupon reuse bypass across storefront pages | Matan Rob</title>
+<link href="favicon.png" rel="icon" type="image/png"/>
+<link href="styles.css" rel="stylesheet"/>
+</head>
+<body><a class="skip-link" href="#article-main">Skip to content</a>
+<main class="writeup-shell" id="article-main" tabindex="-1">
+<nav aria-label="Site navigation" class="writeup-nav"><a class="back-link" href="https://matanrob.vercel.app/">← Back to Matan Rob’s portfolio</a></nav>
+<header class="writeup-header">
+<p class="item-meta">Intigriti Challenge 1026 · Business logic · Report INTIGRITI-YNM7AZD6 · <span class="status status--resolved">Accepted · Medium</span></p>
+<h1>Coupon reuse bypass across storefront pages</h1>
+<p class="intro">
+          The storefront rejected duplicate coupons in one page context, but accepted the same
+          promotions again when the requests were sent from other storefront pages. Repeating
+          <code>NEWS30</code> and <code>NIGHT20</code> pushed the discount past the cart value and
+          allowed a €666.00 order to check out for €0.00.
+        </p>
+<div class="inline-links"><a class="text-link" href="https://challenge-1026.challenges.intigriti.io">Open Intigriti Challenge 1026 ↗</a></div>
+</header>
+<article class="writeup-body">
+<section>
+<h2>Working from the browser</h2>
+<p>
+            I was travelling while testing this challenge, so I was limited to Chrome and its
+            DevTools. I did not have my usual interception proxy available. I started by comparing
+            the requests in the Network tab, then noticed that the API details and session stayed
+            the same while the storefront page—and therefore the <code>Referer</code>—changed.
+          </p>
+<p>
+            To make the flow repeatable, I used the publicly available <code>app.js</code> and AI
+            assistance to shape a small browser-console script. It registered a fresh newsletter
+            email, applied both coupons, and recorded each response and cart total. That gave me a
+            reliable way to test the behavior from several pages without needing anything beyond
+            the browser I had with me.
+          </p>
+</section>
+<section>
+<h2>The intended restriction</h2>
+<p>
+            In a fresh anonymous session, adding the same promotion twice normally returned
+            <code>409 coupon_already_applied</code>. The restriction was expected to apply to the
+            coupon and the current shopping session, regardless of where the request came from.
+          </p>
+</section>
+<section>
+<h2>Changing the storefront page</h2>
+<p>
+            I compared the rejected and accepted requests in Chrome DevTools. The API endpoint,
+            method, JSON body, origin, and session cookie stayed the same. The notable difference
+            was the storefront page that produced the request, reflected in the HTTP
+            <code>Referer</code> header.
+          </p>
+<pre><code>POST /api/cart/coupon
+{"code":"NEWS30"}
+
+← same session, but a different storefront page → 200 OK</code></pre>
+<p>
+            A fresh newsletter registration was also performed during each reproduction, so this
+            report does not isolate whether the page context, the registration flow, or their
+            combination selected the faulty server-side path.
+          </p>
+</section>
+<section>
+<h2>Reproducing the bypass</h2>
+<ol>
+<li>Start a fresh anonymous session and add <code>midnight-vault</code> (€666.00) to the cart.</li>
+<li>From <code>/store</code>, register a new newsletter email and apply <code>NEWS30</code> and <code>NIGHT20</code>.</li>
+<li>Navigate to another product page without clearing the session, register another email, and repeat the two coupon requests.</li>
+<li>Repeat from additional storefront pages until the promotion discounts exceed the cart value.</li>
+</ol>
+<pre><code>const apply = code =&gt; fetch("/api/cart/coupon", {
+  method: "POST",
+  credentials: "same-origin",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ code })
+});
+
+await apply("NEWS30");
+await apply("NIGHT20");</code></pre>
+<p>
+            Requests that previously returned <code>409</code> returned <code>200</code> from the
+            additional pages. The cart retained the earlier promotions and added the same codes
+            again.
+          </p>
+</section>
+<section>
+<h2>Checkout result</h2>
+<p>
+            After the repeated applications, the cart displayed a €0.00 total while retaining the
+            full €66.00 store-credit balance. The checkout endpoint accepted an empty JSON body:
+          </p>
+<pre><code>POST /api/checkout
+{}
+
+HTTP/1.1 200 OK
+{
+  "ok": true,
+  "receipt": {
+    "paid": 0,
+    "credit": 6600,
+    "message": "Your order is confirmed and being prepared."
+  }
+}</code></pre>
+<figure class="writeup-figure">
+<img alt="Challenge storefront showing repeated promotions, a zero total, and the successful checkout response" src="checkout-zero-total.png"/>
+<figcaption>Repeated promotions reduced the €666.00 cart to a zero-cost checkout.</figcaption>
+</figure>
+</section>
+<section>
+<h2>Impact</h2>
+<p>
+            An unauthenticated customer could reuse promotions across storefront pages in one
+            session. The discounts accumulated beyond 100%, resulting in a free order without
+            spending the available store credit.
+          </p>
+</section>
+<section class="lessons">
+<h2>What should change?</h2>
+<ul>
+<li>Track coupon redemption against a stable server-side cart or session identifier and the coupon code.</li>
+<li>Do not use the requesting page or HTTP <code>Referer</code> to decide whether a coupon was already used.</li>
+<li>Keep newsletter registration separate from coupon eligibility.</li>
+<li>Revalidate promotion uniqueness and discount limits during checkout.</li>
+</ul>
+</section>
+</article>
+</main>
+</body>
+</html>
