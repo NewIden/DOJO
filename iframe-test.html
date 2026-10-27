@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>iframe test</title>
+  <style>
+    body { font-family: monospace; padding: 20px; background: #111; color: #0f0; }
+    #status { font-size: 18px; margin-bottom: 10px; }
+    iframe { display: block; width: 100%; height: 600px; border: 2px solid #0f0; }
+  </style>
+</head>
+<body>
+  <div id="status">waiting...</div>
+  <iframe
+    id="probe"
+    src="https://www.brusselsairport.be/en/passenger/flights/arriving?search=iframetest"
+    onload="document.getElementById('status').innerText = 'LOADED — frameable (no XFO)'"
+    onerror="document.getElementById('status').innerText = 'BLOCKED — onerror fired'"
+  ></iframe>
+  <script>
+    // Fallback: if X-Frame-Options blocks, the iframe src won't load and
+    // the browser will show an empty/error frame — onload still fires in some browsers.
+    // Check if the iframe actually rendered BA content or a blank error page.
+    document.getElementById('probe').addEventListener('load', function() {
+      try {
+        // If same-origin this would work; cross-origin will throw
+        var doc = this.contentDocument || this.contentWindow.document;
+        document.getElementById('status').innerText = 'LOADED + same-origin access: ' + doc.title;
+      } catch(e) {
+        // Cross-origin — but loaded means no XFO block
+        document.getElementById('status').innerText = 'LOADED — cross-origin (expected). No X-Frame-Options block. Error: ' + e.message;
+      }
+    });
+  </script>
+</body>
+</html>
